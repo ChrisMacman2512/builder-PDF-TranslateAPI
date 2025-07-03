@@ -2,7 +2,6 @@ import { RequestHandler } from "express";
 import { TranslationResult } from "@shared/api";
 import { PDFDocument, rgb } from "pdf-lib";
 import * as deepl from "deepl-node";
-const pdf = require("pdf-parse");
 
 export const handleTranslatePdf: RequestHandler = async (req, res) => {
   const startTime = Date.now();
@@ -33,8 +32,9 @@ export const handleTranslatePdf: RequestHandler = async (req, res) => {
     let pageCount = 1;
 
     try {
-      // Use pdf-parse to extract text from the actual PDF
-      const pdfData = await pdf(pdfBuffer);
+      // Use dynamic import for pdf-parse to avoid module conflicts
+      const pdfParse = (await import("pdf-parse")).default;
+      const pdfData = await pdfParse(pdfBuffer);
       extractedText = pdfData.text || "";
       pageCount = pdfData.numpages || 1;
 

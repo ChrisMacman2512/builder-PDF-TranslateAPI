@@ -85,8 +85,24 @@ export default function Index() {
           downloadUrl,
         });
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Translation failed");
+        // Check content type to determine how to read the response
+        const contentType = response.headers.get("content-type");
+        let errorMessage = "Translation failed";
+
+        try {
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } else {
+            // If it's not JSON, just use the status text
+            errorMessage = response.statusText || errorMessage;
+          }
+        } catch (parseError) {
+          // If we can't parse the error response, use a generic message
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+
+        throw new Error(errorMessage);
       }
     } catch (error) {
       setTranslation({

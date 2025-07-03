@@ -4,9 +4,6 @@ import { PDFDocument, rgb } from "pdf-lib";
 import * as deepl from "deepl-node";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.js";
 
-// Initialize DeepL translator with API key from environment
-const translator = new deepl.Translator(process.env.DEEPL_API_KEY || "");
-
 export const handleTranslatePdf: RequestHandler = async (req, res) => {
   const startTime = Date.now();
 
@@ -26,6 +23,9 @@ export const handleTranslatePdf: RequestHandler = async (req, res) => {
         error: "DeepL API key not configured",
       } as TranslationResult);
     }
+
+    // Initialize DeepL translator with API key from environment
+    const translator = new deepl.Translator(process.env.DEEPL_API_KEY);
 
     // Parse the PDF to extract text using pdfjs-dist
     const pdfBuffer = Buffer.from(req.body);

@@ -1,6 +1,6 @@
 import { RequestHandler } from "express";
 import { TranslationResult } from "@shared/api";
-import * as pdf from "pdf-parse";
+import pdf from "pdf-parse";
 import { PDFDocument, rgb } from "pdf-lib";
 import * as deepl from "deepl-node";
 

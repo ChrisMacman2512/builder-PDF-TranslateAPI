@@ -26,35 +26,84 @@ export const handleTranslatePdf: RequestHandler = async (req, res) => {
     // Initialize DeepL translator with API key from environment
     const translator = new deepl.Translator(process.env.DEEPL_API_KEY);
 
-    // Parse the PDF - for demo purposes, we'll use sample text
-    // In production, you would integrate with a robust PDF parsing library
+    // Parse the PDF and extract actual text content
     const pdfBuffer = Buffer.from(req.body);
-
-    // Load the PDF to get basic info (page count, etc.)
+    let extractedText = "";
     let pageCount = 1;
+
     try {
+      // Load the PDF document
       const existingPdfDoc = await PDFDocument.load(pdfBuffer);
       pageCount = existingPdfDoc.getPageCount();
+
+      // Since pdf-lib doesn't extract text well, we'll use a simple approach
+      // In a production environment, you'd use a more sophisticated text extraction library
+      // For now, let's try to extract using the PDF buffer directly
+
+      // Convert buffer to string and try to extract readable text
+      const pdfString = pdfBuffer.toString("latin1");
+
+      // Basic text extraction using regex patterns to find readable text
+      // This is a simplified approach - in production you'd use proper PDF parsing
+      const textMatches = pdfString.match(/\(([^)]+)\)/g);
+      const streamMatches = pdfString.match(/stream\s*(.*?)\s*endstream/gs);
+
+      let rawText = "";
+
+      if (textMatches) {
+        textMatches.forEach((match) => {
+          const text = match.slice(1, -1); // Remove parentheses
+          if (text.length > 3 && /[a-zA-Z]/.test(text)) {
+            rawText += text + " ";
+          }
+        });
+      }
+
+      if (streamMatches) {
+        streamMatches.forEach((stream) => {
+          const content = stream.replace(/stream|endstream/g, "").trim();
+          // Look for text that appears to be readable content
+          const readableText = content.match(/[A-Za-z][A-Za-z\s]{10,}/g);
+          if (readableText) {
+            rawText += readableText.join(" ") + " ";
+          }
+        });
+      }
+
+      // Clean up the extracted text
+      extractedText = rawText
+        .replace(/\s+/g, " ") // Normalize whitespace
+        .replace(/[^\w\s.,!?;:()\[\]"'-]/g, "") // Remove special characters
+        .trim();
+
+      // If we couldn't extract meaningful text, try a different approach
+      if (!extractedText || extractedText.length < 50) {
+        // Try to find text in the PDF structure
+        const pdfContent = pdfBuffer.toString(
+          "utf8",
+          0,
+          Math.min(pdfBuffer.length, 10000),
+        );
+        const textSegments = pdfContent.match(
+          /[A-Z][a-z]+(?:\s+[A-Za-z]+){2,}/g,
+        );
+
+        if (textSegments && textSegments.length > 0) {
+          extractedText = textSegments.join(". ");
+        }
+      }
     } catch (error) {
-      console.warn("Could not load PDF for page count:", error);
+      console.error("PDF parsing error:", error);
     }
 
-    // For demo purposes, use sample text that represents typical PDF content
-    const extractedText = `Sample Document Content
-
-This is a demonstration of the PDF translation service. This text represents the content that would typically be extracted from your PDF document.
-
-Key Features:
-• Professional document translation
-• Layout and formatting preservation
-• Support for multiple languages
-• High-quality AI-powered translation
-
-The original document contained ${pageCount} page${pageCount !== 1 ? "s" : ""} of content. In a production environment, this service would extract the actual text from your PDF document while maintaining the original structure and formatting.
-
-This translation service uses advanced AI technology to provide accurate and contextually appropriate translations while preserving the professional appearance of your documents.
-
-Thank you for using our PDF translation service. The translated document will maintain all original formatting, headers, footers, and structural elements.`;
+    // If all extraction methods failed, inform the user
+    if (!extractedText || extractedText.length < 20) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "Could not extract readable text from the PDF. Please ensure the PDF contains selectable text (not just images).",
+      } as TranslationResult);
+    }
 
     // Split text into chunks for translation (DeepL has size limits)
     const textChunks = splitTextIntoChunks(extractedText, 5000);

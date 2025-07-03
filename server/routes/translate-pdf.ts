@@ -2,6 +2,7 @@ import { RequestHandler } from "express";
 import { TranslationResult } from "@shared/api";
 import { PDFDocument, rgb } from "pdf-lib";
 import * as deepl from "deepl-node";
+const pdf = require("pdf-parse");
 
 export const handleTranslatePdf: RequestHandler = async (req, res) => {
   const startTime = Date.now();
@@ -32,71 +33,34 @@ export const handleTranslatePdf: RequestHandler = async (req, res) => {
     let pageCount = 1;
 
     try {
-      // Load the PDF document
-      const existingPdfDoc = await PDFDocument.load(pdfBuffer);
-      pageCount = existingPdfDoc.getPageCount();
+      // Use pdf-parse to extract text from the actual PDF
+      const pdfData = await pdf(pdfBuffer);
+      extractedText = pdfData.text || "";
+      pageCount = pdfData.numpages || 1;
 
-      // Since pdf-lib doesn't extract text well, we'll use a simple approach
-      // In a production environment, you'd use a more sophisticated text extraction library
-      // For now, let's try to extract using the PDF buffer directly
-
-      // Convert buffer to string and try to extract readable text
-      const pdfString = pdfBuffer.toString("latin1");
-
-      // Basic text extraction using regex patterns to find readable text
-      // This is a simplified approach - in production you'd use proper PDF parsing
-      const textMatches = pdfString.match(/\(([^)]+)\)/g);
-      const streamMatches = pdfString.match(/stream\s*(.*?)\s*endstream/gs);
-
-      let rawText = "";
-
-      if (textMatches) {
-        textMatches.forEach((match) => {
-          const text = match.slice(1, -1); // Remove parentheses
-          if (text.length > 3 && /[a-zA-Z]/.test(text)) {
-            rawText += text + " ";
-          }
-        });
-      }
-
-      if (streamMatches) {
-        streamMatches.forEach((stream) => {
-          const content = stream.replace(/stream|endstream/g, "").trim();
-          // Look for text that appears to be readable content
-          const readableText = content.match(/[A-Za-z][A-Za-z\s]{10,}/g);
-          if (readableText) {
-            rawText += readableText.join(" ") + " ";
-          }
-        });
-      }
-
-      // Clean up the extracted text
-      extractedText = rawText
-        .replace(/\s+/g, " ") // Normalize whitespace
-        .replace(/[^\w\s.,!?;:()\[\]"'-]/g, "") // Remove special characters
-        .trim();
-
-      // If we couldn't extract meaningful text, try a different approach
-      if (!extractedText || extractedText.length < 50) {
-        // Try to find text in the PDF structure
-        const pdfContent = pdfBuffer.toString(
-          "utf8",
-          0,
-          Math.min(pdfBuffer.length, 10000),
-        );
-        const textSegments = pdfContent.match(
-          /[A-Z][a-z]+(?:\s+[A-Za-z]+){2,}/g,
-        );
-
-        if (textSegments && textSegments.length > 0) {
-          extractedText = textSegments.join(". ");
-        }
-      }
+      console.log("Extracted text length:", extractedText.length);
+      console.log("First 200 chars:", extractedText.substring(0, 200));
     } catch (error) {
       console.error("PDF parsing error:", error);
+
+      // If pdf-parse fails, try a basic fallback
+      try {
+        const existingPdfDoc = await PDFDocument.load(pdfBuffer);
+        pageCount = existingPdfDoc.getPageCount();
+        console.log("PDF loaded successfully, page count:", pageCount);
+      } catch (fallbackError) {
+        console.error("PDF-lib also failed:", fallbackError);
+      }
     }
 
-    // If all extraction methods failed, inform the user
+    // Clean up the extracted text
+    if (extractedText) {
+      extractedText = extractedText
+        .replace(/\s+/g, " ") // Normalize whitespace
+        .trim();
+    }
+
+    // If we couldn't extract meaningful text, return an error
     if (!extractedText || extractedText.length < 20) {
       return res.status(400).json({
         success: false,

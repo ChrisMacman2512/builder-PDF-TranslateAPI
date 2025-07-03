@@ -1,8 +1,12 @@
 import express from "express";
 import cors from "cors";
 import multer from "multer";
+import { config } from "dotenv";
 import { handleDemo } from "./routes/demo";
 import { handleTranslatePdf } from "./routes/translate-pdf";
+
+// Load environment variables
+config();
 
 export function createServer() {
   const app = express();

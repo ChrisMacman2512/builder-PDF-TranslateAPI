@@ -1,7 +1,11 @@
 import { defineConfig, Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { config } from "dotenv";
 import { createServer } from "./server";
+
+// Load environment variables from .env file
+config();
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
